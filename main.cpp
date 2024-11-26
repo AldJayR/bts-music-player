@@ -51,80 +51,44 @@ struct Song
 };
 
 
-// Function prototypes
+// Music player functions
 void initializePlayer();
-void displayMenu();
-void addSong(vector<Song>& playlist);
-void displayPlaylist(const vector<Song>& playlist, int currentSong = -1);
-void removeSong(vector<Song>& playlist);
 void playSong(const Song& song, bool& shouldExit);
-void displayProgress(sf::Music& music, const Song& song, bool isPaused, float& volume);
-void clearScreen() {
-    system("CLS");
-}
-string getProgressBar(float percentage, bool isPaused);
-void savePlaylist(const vector<Song>& playlist);
-void loadPlaylist(vector<Song>& playlist);
-bool validateAudioFile(const string& filepath);
 void editSong(vector<Song>& playlist);
 void searchSongs(const vector<Song>& playlist);
-void displayNowPlaying(const Song& song, bool isPaused, ostream& out);
+void sortPlaylist(vector<Song>& playlist);
+void addSong(vector<Song>& playlist);
+void removeSong(vector<Song>& playlist);
+
+// Helper functions
+string getProgressBar(float percentage, bool isPaused);
+bool validateAudioFile(const string& filepath);
+string formatDuration(float seconds);
+string toLower(const string& str);
 void handleResize(int sig);
-pair<int, int> getTerminalSize();
+
+// Utility code
+void clearScreen();
+void hideCursor();
+void showCursor();
+int get_int(string prompt);
+
+// UI functions
+void displayMenu();
+void displayPlaylist(const vector<Song>& playlist, int currentSong = -1);
+void displayProgress(sf::Music& music, const Song& song, bool isPaused, float& volume);
 void displayError(const string& message);
 void displaySuccess(const string& message);
 void displayInfo(const string& message);
-string formatDuration(float seconds);
-void sortPlaylist(vector<Song>& playlist);
-string centerText(const string& text, int width);
 void displayHelp();
 void displayLogo();
+void displayNowPlaying(const Song& song, bool isPaused, ostream& out);
 
-void hideCursor()
-{
-    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_CURSOR_INFO info;
-    info.dwSize = 100;
-    info.bVisible = FALSE;
-    SetConsoleCursorInfo(consoleHandle, &info);
-}
 
-void showCursor()
-{
-    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_CURSOR_INFO info;
-    info.dwSize = 100;
-    info.bVisible = TRUE;
-    SetConsoleCursorInfo(consoleHandle, &info);
-}
+// File I/O
+void savePlaylist(const vector<Song>& playlist);
+void loadPlaylist(vector<Song>& playlist);
 
-int get_int(string prompt)
-{
-    regex integer_regex("^-?[0-9]+$");
-    string input;
-
-    while (true)
-    {
-        cout << CYAN << prompt << RESET;
-        getline(cin, input);
-
-        if (regex_match(input, integer_regex))
-        {
-            try
-            {
-                return stoi(input);
-            }
-            catch (out_of_range&)
-            {
-                cout << "Error: Number out of range. Please try again.\n";
-            }
-        }
-        else
-        {
-            cout << RED << "Invalid input. Please enter a valid integer.\n" << RESET;
-        }
-    }
-}
 
 int main()
 {
@@ -157,7 +121,7 @@ int main()
                 cin.get();
                 break;
             case 3: // Remove Song
-                // removeSong(playlist);
+                removeSong(playlist);
                 savePlaylist(playlist);
                 break;
             case 4: // Play Song
@@ -205,119 +169,20 @@ int main()
 }
 
 
-
-void addSong(vector<Song>& playlist)
+// Player functions
+void initializePlayer()
 {
-    system("CLS");
-    cout << MAGENTA << BOLD << "╔════════════════════════════════════╗\n";
-    cout << "║          🎵 Add New Song 🎵          ║\n";
-    cout << "╚════════════════════════════════════╝" << RESET << "\n\n";
+    // Set up terminal
+    #ifdef _WIN32
+        system("color");
+    #else
+        // Handle terminal resize for Unix-like systems
+        signal(SIGWINCH, handleResize);
+    #endif
 
-    Song song;
-
-    // Enter song title
-    cout << CYAN << "🔹 Enter song title: " << RESET;
-    getline(cin, song.title);
-
-    // Default artist (can be adjusted if user input is needed)
-    song.artist = "BTS";
-
-    // Enter album name
-    cout << CYAN << "🔹 Enter album name: " << RESET;
-    getline(cin, song.album);
-
-    // Enter release year
-    while (true)
-    {
-        cout << CYAN << "🔹 Enter release year: " << RESET;
-        cin >> song.year;
-
-        if (cin.fail() || song.year < 1900 || song.year > 2100)
-        {
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            displayError("Invalid year! Please enter a valid year (1900-2100).");
-        }
-        else
-        {
-            cin.ignore();
-            break;
-        }
-    }
-
-    // Enter audio filepath
-    while (true)
-    {
-        cout << CYAN << "🔹 Enter audio filepath: " << RESET;
-        getline(cin, song.filepath);
-
-        if (validateAudioFile(song.filepath))
-        {
-            break;
-        }
-        displayError("❌ Invalid audio file! Please check the path and try again.");
-    }
-
-    // Get duration using SFML
-    sf::Music music;
-    if (music.openFromFile(song.filepath))
-    {
-        song.duration = music.getDuration().asSeconds();
-    }
-    else
-    {
-        song.duration = 0.0f;
-    }
-
-    playlist.push_back(song);
-
-    displaySuccess("✅ Song added successfully!");
+    // Create save directory if it doesn't exist
+    fs::create_directories("playlist_data");
 }
-
-void displayPlaylist(const vector<Song>& playlist, int currentSong)
-{
-    clearScreen();
-    cout << MAGENTA << BOLD << "╔══════════════════════════════════════════════════════════════════════╗\n";
-    cout << "║                            🎵 Current Playlist 🎵                    ║\n";
-    cout << "╚══════════════════════════════════════════════════════════════════════╝" << RESET << "\n\n";
-
-    if (playlist.empty())
-    {
-        displayInfo("Playlist is empty!");
-        return;
-    }
-
-    // Table header
-    cout << CYAN << "╔════╤──────────────────────────────────────┬──────────────────────┬──────┬──────────╗\n";
-    cout << "║ No │ Title                                │ Album                │ Year │ Duration ║\n";
-    cout << "╟────┼──────────────────────────────────────┼──────────────────────┼──────┼──────────╢\n";
-
-    // Table content
-    for (size_t i = 0; i < playlist.size(); i++)
-    {
-        string rowColor = (i == currentSong) ? GREEN : WHITE;
-
-        // Truncate text if too long
-        string title = playlist[i].title.length() > 30 ? playlist[i].title.substr(0, 27) + "..." : playlist[i].title;
-        string album = playlist[i].album.length() > 20 ? playlist[i].album.substr(0, 17) + "..." : playlist[i].album;
-
-        cout << rowColor
-             << "║ " << setw(2) << i + 1 << " │ "
-             << setw(36) << left << title << " │ "
-             << setw(20) << left << album << " │ "
-             << setw(4) << right << playlist[i].year << " │ "
-             << setw(8) << right << formatDuration(playlist[i].duration) << " ║\n";
-
-        if (i < playlist.size() - 1)
-        {
-            cout << CYAN << "╟────┼──────────────────────────────────────┼──────────────────────┼──────┼──────────╢\n";
-        }
-    }
-
-    // Table footer
-    cout << CYAN << "╚════╧──────────────────────────────────────┴──────────────────────┴──────┴──────────╝" << RESET << "\n";
-}
-
 
 void playSong(const Song& song, bool& shouldExit)
 {
@@ -330,7 +195,7 @@ void playSong(const Song& song, bool& shouldExit)
 
     music.play();
     bool isPaused = false;
-    float currentVolume = 100.0f; // Changed to double to match displayProgress
+    float currentVolume = 100.0f;
     music.setVolume(static_cast<float>(currentVolume));
 
     clearScreen();
@@ -404,73 +269,364 @@ void playSong(const Song& song, bool& shouldExit)
     }
 }
 
-void displayProgress(sf::Music& music, const Song& song, bool isPaused, float& volume)
+void editSong(vector<Song>& playlist)
 {
-    static string lastDisplay = "";
-    auto [width, height] = getTerminalSize();
-
-    float duration = music.getDuration().asSeconds();
-    float currentTime = music.getPlayingOffset().asSeconds();
-    float percentage = (currentTime / duration) * 100;
-    int volumeInt = static_cast<int>(volume);
-
-    stringstream ss;
-
-    // Now Playing
-    displayNowPlaying(song, isPaused, ss);
-    ss << "\n";
-
-    // Progress bar
-    string progressBar = getProgressBar(percentage, isPaused);
-    ss << YELLOW << progressBar << RESET << "\n";
-
-    // Time and Volume display
-    string timeDisplay = formatDuration(currentTime) + " / " + formatDuration(duration);
-    string volumeDisplay = "Volume: " + to_string(volumeInt) + "%";
-    ss << YELLOW << timeDisplay << RESET << "   " << GREEN << volumeDisplay << RESET << "\n\n";
-
-    // Controls
-    ss << CYAN << "Controls:" << RESET << "\n";
-    vector<string> controls =
+    if (playlist.empty())
     {
-        "⏯ Space: Play/Pause",
-        "⏹ Q: Stop",
-        "🔁 R: Restart",
-        "⏪⏩ <,>: Seek",
-        "🔈🔊 -,+: Volume",
-        "❌ ESC: Exit"
-    };
-
-    for (const auto& control : controls)
-    {
-        ss << CYAN << "- " << control << RESET << "\n";
+        displayError("🎵 The playlist is empty! Add songs to edit.");
+        return;
     }
 
-    // Update the terminal
-    string currentDisplay = ss.str();
-    if (currentDisplay != lastDisplay)
+    displayPlaylist(playlist);
+    int index = get_int("🎶 Enter song number to edit (0 to cancel): ");
+
+    if (index == 0)
     {
-        cout << "\033[3;1H"; // Move cursor to line 3
-        cout << "\033[J";    // Clear from cursor to end of screen
-        cout << currentDisplay << flush;
-        lastDisplay = currentDisplay;
+        displayInfo("❌ Edit canceled.");
+        return;
+    }
+    if (index < 1 || index > static_cast<int>(playlist.size()))
+    {
+        displayError("🚫 Invalid song number!");
+        return;
+    }
+
+    Song& song = playlist[index - 1];
+
+    clearScreen();
+    cout << MAGENTA << "    ╔═══════════════════════════════════════════════╗\n";
+    cout << "    ║           🎶 Edit Song 🎶                     ║\n";
+    cout << "    ╚═══════════════════════════════════════════════╝" << RESET << "\n\n";
+
+    // Display current song details
+    cout << "🎶 Current details:\n";
+    cout << CYAN << "1. Title:    " << WHITE << song.title << "\n";
+    cout << CYAN << "2. Album:    " << WHITE << song.album << "\n";
+    cout << CYAN << "3. Year:     " << WHITE << song.year << "\n";
+    cout << CYAN << "4. Filepath: " << WHITE << song.filepath << RESET << "\n\n";
+
+    while (true)
+    {
+        int field = get_int("🎶 Enter field number to edit (0 to finish): ");
+
+        // Handle finishing edits
+        if (field == 0)
+        {
+            displaySuccess("✔️ All changes saved!");
+            break;
+        }
+
+        switch (field)
+        {
+            case 1: // Edit title
+                cout << CYAN << "🎶 Enter new title: " << RESET;
+                getline(cin, song.title);
+                displaySuccess("✔️ Title updated successfully!");
+                break;
+
+            case 2: // Edit album
+                cout << CYAN << "🎶 Enter new album: " << RESET;
+                getline(cin, song.album);
+                displaySuccess("✔️ Album updated successfully!");
+                break;
+
+            case 3: // Edit year
+                song.year = get_int("🎶 Enter new year: ");
+                if (song.year < 1800 || song.year > 2100)
+                {
+                    displayError("🚫 Invalid year! Please enter a valid year.");
+                    continue;
+                }
+                displaySuccess("✔️ Year updated successfully!");
+                break;
+
+            case 4:
+                while (true)
+                {
+                    cout << CYAN << "🎶 Enter new filepath: " << RESET;
+                    getline(cin, song.filepath);
+                    if (validateAudioFile(song.filepath))
+                    {
+                        // Update duration
+                        sf::Music music;
+                        if (music.openFromFile(song.filepath))
+                        {
+                            song.duration = music.getDuration().asSeconds();
+                        }
+                        displaySuccess("✔️ Filepath and duration updated successfully!");
+                        break;
+                    }
+                    displayError("🚫 Invalid audio file! Please check the path and try again.");
+                }
+                break;
+
+            default:
+                displayError("🚫 Invalid option! Please enter a number between 1 and 4.");
+        }
     }
 }
 
-void displayNowPlaying(const Song& song, bool isPaused, ostream& out)
+void searchSongs(const vector<Song>& playlist)
 {
-    // Playing status
-    string status = isPaused ? "⏸️ PAUSED" : "▶️ NOW PLAYING";
+    if (playlist.empty())
+    {
+        displayError("🎵 Playlist is empty!");
+        return;
+    }
 
-    // Song details
-    string title = song.title + " - " + song.artist;
-    string album = "Album: " + song.album + " (" + to_string(song.year) + ")";
+    string searchTerm;
+    vector<Song> filteredSongs;
 
-    // Display the now-playing information
-    out << MAGENTA << BOLD << status << RESET << "\n";
-    out << GREEN << BOLD << title << RESET << "\n";
-    out << BLUE << album << RESET << "\n";
+    while (true)
+    {
+        clearScreen();
+        cout << BOLD << CYAN << "╔══════════════════════════════════════════╗" << RESET << '\n';
+        cout << BOLD << CYAN << "║           🎶 Search Songs 🎶             ║" << RESET << '\n';
+        cout << BOLD << CYAN << "╚══════════════════════════════════════════╝" << RESET << '\n' << '\n';
+
+        // Get the search term from the user
+        cout << YELLOW << "Enter search term (press Esc to exit): " << RESET;
+        cout << searchTerm;
+
+        // Perform the search if the term is not empty
+        if (!searchTerm.empty())
+        {
+            filteredSongs.clear();
+            string lowerSearchTerm = toLower(searchTerm);
+            for (const auto& song : playlist)
+            {
+                string title = toLower(song.title);
+                string album = toLower(song.album);
+
+                if (title.find(lowerSearchTerm) != string::npos || album.find(lowerSearchTerm) != string::npos)
+                {
+                    filteredSongs.push_back(song);
+                }
+            }
+
+            // Display results
+            if (!filteredSongs.empty())
+            {
+                cout << "\n\n";
+                cout << CYAN << "┌────────────────────┬────────────────────┐" << RESET << endl;
+                cout << CYAN << "│ " << WHITE << setw(18) << left << "Title"
+                     << CYAN << " │ " << WHITE << setw(18) << left << "Album" << BLUE << " │" << RESET << endl;
+                cout << CYAN << "├────────────────────┼────────────────────┤" << RESET << endl;
+
+                for (const auto& song : filteredSongs)
+                {
+                    cout << CYAN << "│ " << WHITE << setw(18) << left << song.title
+                         << CYAN << " │ " << WHITE << setw(18) << left << song.album << BLUE << " │" << RESET << endl;
+                }
+
+                cout << CYAN << "└────────────────────┴────────────────────┘" << RESET << endl;
+            }
+            else
+            {
+                cout << "\n\n" << YELLOW << "No matching songs found." << RESET << endl;
+            }
+        }
+
+        // Handle user input for search term
+        char ch = _getch();
+
+        if (ch == 27) // Escape key to exit
+        {
+            break;
+        }
+        else if (ch == 8) // Backspace to remove last character
+        {
+            if (!searchTerm.empty())
+            {
+                searchTerm.pop_back();
+            }
+        }
+        else if (isprint(ch)) // Handle printable characters
+        {
+            searchTerm += ch;
+        }
+    }
 }
+
+void sortPlaylist(vector<Song>& playlist)
+{
+    if (playlist.empty())
+    {
+        displayError("🎵 Playlist is empty!");
+        return;
+    }
+
+    while (true)
+    {
+        clearScreen();
+        cout << BOLD << CYAN << "╔══════════════════════════════════════════╗" << RESET << '\n';
+        cout << BOLD << CYAN << "║          🎶 Sort Playlist 🎶             ║" << RESET << '\n';
+        cout << BOLD << CYAN << "╚══════════════════════════════════════════╝" << RESET << '\n' << '\n';
+
+        cout << "Sort by:\n";
+        cout << CYAN << "1. Title\n";
+        cout << "2. Album\n";
+        cout << "3. Year\n";
+        cout << "4. Duration\n" << RESET;
+
+        int choice = get_int("Enter choice: ");
+
+        switch (choice)
+        {
+            case 1:
+                sort(playlist.begin(), playlist.end(),
+                    [](const Song& a, const Song& b) { return a.title < b.title; });
+                displaySuccess("Playlist sorted by Title!");
+                return;
+            case 2:
+                sort(playlist.begin(), playlist.end(),
+                    [](const Song& a, const Song& b) { return a.album < b.album; });
+                displaySuccess("Playlist sorted by Album!");
+                return;
+            case 3:
+                sort(playlist.begin(), playlist.end(),
+                    [](const Song& a, const Song& b) { return a.year < b.year; });
+                displaySuccess("Playlist sorted by Year!");
+                return;
+            case 4:
+                sort(playlist.begin(), playlist.end(),
+                    [](const Song& a, const Song& b) { return a.duration < b.duration; });
+                displaySuccess("Playlist sorted by Duration!");
+                return;
+            default:
+                displayError("Invalid choice! Please try again.");
+                break;
+        }
+    }
+}
+
+void addSong(vector<Song>& playlist)
+{
+    system("CLS");
+    cout << MAGENTA << BOLD << "╔════════════════════════════════════╗\n";
+    cout << "║          🎵 Add New Song 🎵        ║\n";
+    cout << "╚════════════════════════════════════╝" << RESET << "\n\n";
+
+    Song song;
+
+    cout << CYAN << "🔹 Enter song title: " << RESET;
+    getline(cin, song.title);
+
+    song.artist = "BTS";
+
+    cout << CYAN << "🔹 Enter album name: " << RESET;
+    getline(cin, song.album);
+
+    // Enter release year
+    while (true)
+    {
+        cout << CYAN << "🔹 Enter release year: " << RESET;
+        cin >> song.year;
+
+        if (cin.fail() || song.year < 1900 || song.year > 2100)
+        {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            displayError("Invalid year! Please enter a valid year (1900-2100).");
+        }
+        else
+        {
+            cin.ignore();
+            break;
+        }
+    }
+
+    while (true)
+    {
+        cout << CYAN << "🔹 Enter audio filepath: " << RESET;
+        getline(cin, song.filepath);
+
+        if (validateAudioFile(song.filepath))
+        {
+            break;
+        }
+        displayError("❌ Invalid audio file! Please check the path and try again.");
+    }
+
+    // Get duration using SFML
+    sf::Music music;
+    if (music.openFromFile(song.filepath))
+    {
+        song.duration = music.getDuration().asSeconds();
+    }
+    else
+    {
+        song.duration = 0.0f;
+    }
+
+    playlist.push_back(song);
+
+    displaySuccess("✅ Song added successfully!");
+}
+
+void removeSong(vector<Song>& playlist)
+{
+    clearScreen();
+
+    // Display the current playlist header
+    cout << MAGENTA << BOLD << "╔════════════════════════════════════════╗\n";
+    cout << "║          🎵 Remove a Song 🎵           ║\n";
+    cout << "╚════════════════════════════════════════╝" << RESET << "\n\n";
+
+    if (playlist.empty())
+    {
+        displayInfo("Playlist is empty! There are no songs to remove.");
+        return;
+    }
+
+    displayPlaylist(playlist);
+
+    int songNumber;
+
+    while (true)
+    {
+        songNumber = get_int("\nEnter the song number to remove (0 to cancel): ");
+
+        if (songNumber == 0)
+        {
+            displayInfo("Song removal cancelled.");
+            return;
+        }
+        else if (songNumber > 0 && songNumber <= static_cast<int>(playlist.size()))
+        {
+            break;
+        }
+        else
+        {
+            displayError("Invalid input! Please enter a valid song number.");
+        }
+    }
+
+    size_t indexToRemove = static_cast<size_t>(songNumber - 1);
+    string removedSongTitle = playlist[indexToRemove].title;
+
+    cout << RED << "\nAre you sure you want to remove \"" << removedSongTitle << "\"? (y/n): " << RESET;
+    string confirmation;
+    getline(cin, confirmation);
+
+    if (toLower(confirmation) != "y" && toLower(confirmation) != "yes")
+    {
+        displayInfo("Song removal cancelled.");
+        Sleep(2000);
+        return;
+    }
+
+    playlist.erase(playlist.begin() + indexToRemove);
+
+    displaySuccess("✅ Successfully removed \"" + removedSongTitle + "\" from the playlist.");
+    Sleep(2000);
+
+    // Save the updated playlist
+    savePlaylist(playlist);
+}
+
+
+// Helper and utility functions
 
 string getProgressBar(float percentage, bool isPaused)
 {
@@ -503,8 +659,297 @@ string getProgressBar(float percentage, bool isPaused)
     return bar + " " + oss.str();
 }
 
-// ... [Remaining function implementations] ...
+bool validateAudioFile(const string& filepath)
+{
+    if (!fs::exists(filepath)) return false;
 
+    string extension = fs::path(filepath).extension().string();
+    transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+    vector<string> validExtensions = {".wav", ".ogg", ".flac", ".mp3"};
+    return find(validExtensions.begin(), validExtensions.end(), extension) != validExtensions.end();
+}
+
+string formatDuration(float seconds)
+{
+    int mins = seconds / 60;
+    int secs = (int)seconds % 60;
+    stringstream ss;
+    ss << setfill('0') << setw(2) << mins << ":"
+       << setfill('0') << setw(2) << secs;
+    return ss.str();
+}
+
+void handleResize(int sig)
+{
+    // Clear screen and redraw interface
+    clearScreen();
+    displayLogo();
+    displayMenu();
+}
+
+string toLower(const string& str)
+{
+    string lower = str;
+    transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return tolower(c); });
+    return lower;
+}
+
+void clearScreen()
+{
+    system("CLS");
+}
+
+void hideCursor()
+{
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO info;
+    info.dwSize = 100;
+    info.bVisible = FALSE;
+    SetConsoleCursorInfo(consoleHandle, &info);
+}
+
+void showCursor()
+{
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO info;
+    info.dwSize = 100;
+    info.bVisible = TRUE;
+    SetConsoleCursorInfo(consoleHandle, &info);
+}
+
+int get_int(string prompt)
+{
+    regex integer_regex("^-?[0-9]+$");
+    string input;
+
+    while (true)
+    {
+        cout << CYAN << prompt << RESET;
+        getline(cin, input);
+
+        if (regex_match(input, integer_regex))
+        {
+            try
+            {
+                return stoi(input);
+            }
+            catch (out_of_range&)
+            {
+                cout << "Error: Number out of range. Please try again.\n";
+            }
+        }
+        else
+        {
+            cout << RED << "Invalid input. Please enter a valid integer.\n" << RESET;
+        }
+    }
+}
+
+
+// UI Functions
+void displayMenu()
+{
+    cout << BLUE << BOLD << "╔══════════════════════════════════════════════════════╗" << RESET << endl;
+    cout << BLUE << "║                                                      ║" << RESET << endl;
+
+    string menu[] = {
+        CYAN + "1." + RESET + "  " + YELLOW + "Add Song" + RESET,
+        CYAN + "2." + RESET + "  " + YELLOW + "View Playlist" + RESET,
+        CYAN + "3." + RESET + "  " + YELLOW + "Remove Song" + RESET,
+        CYAN + "4." + RESET + "  " + YELLOW + "Play Song" + RESET,
+        CYAN + "5." + RESET + "  " + YELLOW + "Edit Song" + RESET,
+        CYAN + "6." + RESET + "  " + YELLOW + "Search Songs" + RESET,
+        CYAN + "7." + RESET + "  " + YELLOW + "Sort Playlist" + RESET,
+        CYAN + "8." + RESET + "  " + YELLOW + "Help" + RESET,
+        CYAN + "9." + RESET + "  " + RED + "Exit" + RESET
+    };
+
+    for (const auto& item : menu)
+    {
+        cout << "║ " << item << string(70 - item.length(), ' ') << " ║" << endl;
+    }
+
+    cout << BLUE << "║                                                      ║" << RESET << endl;
+    cout << BLUE << "╚══════════════════════════════════════════════════════╝" << RESET << endl;
+    cout << '\n';
+}
+
+void displayPlaylist(const vector<Song>& playlist, int currentSong)
+{
+    clearScreen();
+    cout << MAGENTA << BOLD << "╔══════════════════════════════════════════════════════════════════════╗\n";
+    cout << "║                            🎵 Current Playlist 🎵                    ║\n";
+    cout << "╚══════════════════════════════════════════════════════════════════════╝" << RESET << "\n\n";
+
+    if (playlist.empty())
+    {
+        displayInfo("Playlist is empty!");
+        return;
+    }
+
+    // Table header
+    cout << CYAN << "╔════╤──────────────────────────────────────┬──────────────────────┬──────┬──────────╗\n";
+    cout << "║ No │ Title                                │ Album                │ Year │ Duration ║\n";
+    cout << "╟────┼──────────────────────────────────────┼──────────────────────┼──────┼──────────╢\n";
+
+    // Table content
+    for (size_t i = 0; i < playlist.size(); i++)
+    {
+        string rowColor = (i == currentSong) ? GREEN : WHITE;
+
+        // Truncate text if too long
+        string title = playlist[i].title.length() > 30 ? playlist[i].title.substr(0, 27) + "..." : playlist[i].title;
+        string album = playlist[i].album.length() > 20 ? playlist[i].album.substr(0, 17) + "..." : playlist[i].album;
+
+        cout << rowColor
+             << "║ " << setw(2) << i + 1 << " │ "
+             << setw(36) << left << title << " │ "
+             << setw(20) << left << album << " │ "
+             << setw(4) << right << playlist[i].year << " │ "
+             << setw(8) << right << formatDuration(playlist[i].duration) << " ║\n";
+
+        if (i < playlist.size() - 1)
+        {
+            cout << CYAN << "╟────┼──────────────────────────────────────┼──────────────────────┼──────┼──────────╢\n";
+        }
+    }
+
+    // Table footer
+    cout << CYAN << "╚════╧──────────────────────────────────────┴──────────────────────┴──────┴──────────╝" << RESET << "\n";
+}
+
+void displayProgress(sf::Music& music, const Song& song, bool isPaused, float& volume)
+{
+    static string lastDisplay = "";
+
+    float duration = music.getDuration().asSeconds();
+    float currentTime = music.getPlayingOffset().asSeconds();
+    float percentage = (currentTime / duration) * 100;
+    int volumeInt = static_cast<int>(volume);
+
+    stringstream ss;
+
+    displayNowPlaying(song, isPaused, ss);
+    ss << "\n";
+    // Progress bar
+    string progressBar = getProgressBar(percentage, isPaused);
+    ss << YELLOW << progressBar << RESET << "\n";
+
+    // Time and Volume display
+    string timeDisplay = formatDuration(currentTime) + " / " + formatDuration(duration);
+    string volumeDisplay = "Volume: " + to_string(volumeInt) + "%";
+    ss << YELLOW << timeDisplay << RESET << "   " << GREEN << volumeDisplay << RESET << "\n\n";
+
+    // Controls
+    ss << CYAN << "Controls:" << RESET << "\n";
+    vector<string> controls =
+    {
+        "⏯  Space: Play/Pause",
+        "⏹  Q: Stop",
+        "🔁  R: Restart",
+        "⏪⏩ <,>: Seek",
+        "🔈🔊 -,+: Volume",
+        "❌ ESC: Exit Program"
+    };
+
+    for (const auto& control : controls)
+    {
+        ss << CYAN << "- " << control << RESET << "\n";
+    }
+
+    string currentDisplay = ss.str();
+    if (currentDisplay != lastDisplay)
+    {
+        cout << "\033[3;1H";
+        cout << "\033[J";
+        cout << currentDisplay << flush;
+        lastDisplay = currentDisplay;
+    }
+}
+
+
+void displayError(const string& message)
+{
+    cout << RED << BOLD << "Error: " << message << RESET << "\n";
+    this_thread::sleep_for(chrono::seconds(2));
+}
+
+void displaySuccess(const string& message)
+{
+    cout << GREEN << BOLD << "Success: " << message << RESET << "\n";
+    this_thread::sleep_for(chrono::seconds(2));
+}
+
+void displayInfo(const string& message)
+{
+    cout << BLUE << BOLD << "Info: " << message << RESET << "\n";
+}
+
+void displayHelp()
+{
+    clearScreen();
+
+    cout << MAGENTA << BOLD << "╔══════════════════════════════════════════════════════╗" << '\n';
+    cout << "║                🎵 BTS Music Player Help 🎵           ║" << '\n';
+    cout << "╠══════════════════════════════════════════════════════╣" << RESET << '\n';
+
+    cout << '\n';
+    // Navigation Controls Section
+    cout << CYAN << BOLD << "Navigation Controls:" << RESET << "\n";
+    cout << GREEN << "• " << RESET << "Use number keys to select menu options\n";
+    cout << GREEN << "• " << RESET << "Press Enter to confirm selections\n\n";
+
+    // Playback Controls Section
+    cout << CYAN << BOLD << "Playback Controls:" << RESET << "\n";
+    cout << YELLOW << "• " << RESET << "Space: Play/Pause\n";
+    cout << YELLOW << "• " << RESET << "Q: Stop current song\n";
+    cout << YELLOW << "• " << RESET << "R: Restart song\n";
+    cout << YELLOW << "• " << RESET << "<: Rewind 5 seconds\n";
+    cout << YELLOW << "• " << RESET << ">: Forward 5 seconds\n";
+    cout << YELLOW << "• " << RESET << "ESC: Exit to main menu\n\n";
+
+    cout << CYAN << BOLD << "Volume Controls:" << RESET << "\n";
+    cout << BLUE << "• " << RESET << "-: Decrease volume\n";
+    cout << BLUE << "• " << RESET << "+ or /: Increase volume\n\n";
+
+    cout << CYAN << BOLD << "File Management:" << RESET << "\n";
+    cout << BLUE << "• " << RESET << "Supported formats: .wav, .ogg, .flac, .mp3\n";
+    cout << BLUE << "• " << RESET << "Playlist is automatically saved\n";
+    cout << BLUE << "• " << RESET << "Use absolute paths or relative paths from program directory\n\n";
+
+    cout << MAGENTA << BOLD << "╚══════════════════════════════════════════════════════╝" << '\n';
+    cout << "\n" << CYAN << "Press Enter to return to menu..." << RESET;
+    cin.get();
+}
+
+void displayLogo()
+{
+    cout << MAGENTA << BOLD;
+    cout << R"(
+    ╔═══════════════════════════════════════════════╗
+    ║     ♪♫•*¨*•.¸¸♫♪ BTS PLAYER ♪♫•*¨*•.¸¸♫♪      ║
+    ╚═══════════════════════════════════════════════╝
+)" << RESET << '\n';
+}
+
+void displayNowPlaying(const Song& song, bool isPaused, ostream& out)
+{
+    // Playing status
+    string status = isPaused ? "⏸️ PAUSED" : "▶️ NOW PLAYING";
+
+    // Song details
+    string title = song.title + " - " + song.artist;
+    string album = "Album: " + song.album + " (" + to_string(song.year) + ")";
+
+    // Display the now-playing information
+    out << MAGENTA << BOLD << status << RESET << "\n";
+    out << GREEN << BOLD << title << RESET << "\n";
+    out << BLUE << album << RESET << "\n";
+}
+
+// File I/O
 void savePlaylist(const vector<Song>& playlist)
 {
     ofstream file("playlist_data/playlist.dat", ios::binary);
@@ -565,366 +1010,4 @@ void loadPlaylist(vector<Song>& playlist)
 
         playlist.push_back(song);
     }
-}
-
-bool validateAudioFile(const string& filepath)
-{
-    if (!fs::exists(filepath)) return false;
-
-    string extension = fs::path(filepath).extension().string();
-    transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-
-    vector<string> validExtensions = {".wav", ".ogg", ".flac", ".mp3"};
-    return find(validExtensions.begin(), validExtensions.end(), extension) != validExtensions.end();
-}
-
-void editSong(vector<Song>& playlist)
-{
-    if (playlist.empty())
-    {
-        displayError("Playlist is empty!");
-        return;
-    }
-
-    displayPlaylist(playlist);
-    cout << "\n" << CYAN << "Enter song number to edit (0 to cancel): " << RESET;
-    int index;
-    cin >> index;
-    cin.ignore();
-
-    if (index <= 0 || index > playlist.size())
-    {
-        return;
-    }
-
-    Song& song = playlist[index - 1];
-    clearScreen();
-    cout << MAGENTA << BOLD << "=== Edit Song ===" << RESET << "\n\n";
-    cout << "Current details:\n";
-    cout << CYAN << "1. Title: " << WHITE << song.title << "\n";
-    cout << CYAN << "2. Album: " << WHITE << song.album << "\n";
-    cout << CYAN << "3. Year: " << WHITE << song.year << "\n";
-    cout << CYAN << "4. Filepath: " << WHITE << song.filepath << "\n" << RESET;
-
-    cout << "\n" << CYAN << "Enter field number to edit (0 to finish): " << RESET;
-    int field;
-    cin >> field;
-    cin.ignore();
-
-    switch (field)
-    {
-        case 1:
-            cout << CYAN << "Enter new title: " << RESET;
-            getline(cin, song.title);
-            break;
-        case 2:
-            cout << CYAN << "Enter new album: " << RESET;
-            getline(cin, song.album);
-            break;
-        case 3:
-            cout << CYAN << "Enter new year: " << RESET;
-            cin >> song.year;
-            break;
-        case 4:
-            while (true) {
-                cout << CYAN << "Enter new filepath: " << RESET;
-                getline(cin, song.filepath);
-                if (validateAudioFile(song.filepath))
-                {
-                    // Update duration
-                    sf::Music music;
-                    if (music.openFromFile(song.filepath))
-                    {
-                        song.duration = music.getDuration().asSeconds();
-                    }
-                    break;
-                }
-                displayError("Invalid audio file! Please check the path and try again.");
-            }
-            break;
-    }
-    displaySuccess("Song updated successfully!");
-}
-
-void searchSongs(const vector<Song>& playlist)
-{
-    if (playlist.empty())
-    {
-        displayError("Playlist is empty!");
-        return;
-    }
-
-    clearScreen();
-    cout << MAGENTA << BOLD << "=== Search Songs ===" << RESET << "\n\n";
-    cout << CYAN << "Enter search term: " << RESET;
-    string searchTerm;
-    getline(cin, searchTerm);
-    transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
-
-    vector<pair<size_t, Song>> matches;
-    for (size_t i = 0; i < playlist.size(); ++i)
-    {
-        string title = playlist[i].title;
-        string album = playlist[i].album;
-        transform(title.begin(), title.end(), title.begin(), ::tolower);
-        transform(album.begin(), album.end(), album.begin(), ::tolower);
-
-        if (title.find(searchTerm) != string::npos ||
-            album.find(searchTerm) != string::npos)
-        {
-            matches.push_back({i, playlist[i]});
-        }
-    }
-
-    if (matches.empty())
-    {
-        displayError("No matches found!");
-        return;
-    }
-
-    cout << "\nSearch results:\n";
-    for (const auto& [index, song] : matches)
-    {
-        cout << CYAN << index + 1 << ". " << WHITE << song.title
-             << BLUE << " (" << song.album << ")" << RESET << "\n";
-    }
-    cout << "\nPress Enter to continue...";
-    cin.get();
-}
-
-void sortPlaylist(vector<Song>& playlist)
-{
-    if (playlist.empty())
-    {
-        displayError("Playlist is empty!");
-        return;
-    }
-
-    clearScreen();
-    cout << MAGENTA << BOLD << "=== Sort Playlist ===" << RESET << "\n\n";
-    cout << "Sort by:\n";
-    cout << CYAN << "1. Title\n";
-    cout << "2. Album\n";
-    cout << "3. Year\n";
-    cout << "4. Duration\n" << RESET;
-
-    cout << "\n" << CYAN << "Enter choice: " << RESET;
-    int choice;
-    cin >> choice;
-
-    switch (choice)
-    {
-        case 1:
-            sort(playlist.begin(), playlist.end(),
-                [](const Song& a, const Song& b) { return a.title < b.title; });
-            break;
-        case 2:
-            sort(playlist.begin(), playlist.end(),
-                [](const Song& a, const Song& b) { return a.album < b.album; });
-            break;
-        case 3:
-            sort(playlist.begin(), playlist.end(),
-                [](const Song& a, const Song& b) { return a.year < b.year; });
-            break;
-        case 4:
-            sort(playlist.begin(), playlist.end(),
-                [](const Song& a, const Song& b) { return a.duration < b.duration; });
-            break;
-        default:
-            displayError("Invalid choice!");
-            return;
-    }
-}
-
-pair<int, int> getTerminalSize()
-{
-    #ifdef _WIN32
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-        return {
-            csbi.srWindow.Right - csbi.srWindow.Left + 1,
-            csbi.srWindow.Bottom - csbi.srWindow.Top + 1
-        };
-    #else
-        struct winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-        return {w.ws_col, w.ws_row};
-    #endif
-}
-
-string centerText(const string& text, int width)
-{
-    // Strip ANSI codes for length calculation
-    string stripped = text;
-    size_t pos = 0;
-    while ((pos = stripped.find("\033[", pos)) != string::npos)
-    {
-        size_t end = stripped.find("m", pos);
-        if (end != string::npos)
-        {
-            stripped.erase(pos, end - pos + 1);
-        }
-    }
-
-    int padding = (width - stripped.length()) / 2;
-    return string(max(0, padding), ' ') + text;
-}
-
-string formatDuration(float seconds)
-{
-    int mins = seconds / 60;
-    int secs = (int)seconds % 60;
-    stringstream ss;
-    ss << setfill('0') << setw(2) << mins << ":"
-       << setfill('0') << setw(2) << secs;
-    return ss.str();
-}
-
-void displayHelp()
-{
-    clearScreen();
-    cout << MAGENTA << BOLD << "=== BTS Music Player Help ===" << RESET << "\n\n";
-
-    cout << CYAN << "Navigation Controls:" << RESET << "\n";
-    cout << "• Use number keys to select menu options\n";
-    cout << "• Press Enter to confirm selections\n\n";
-
-    cout << CYAN << "Playback Controls:" << RESET << "\n";
-    cout << "• Space: Play/Pause\n";
-    cout << "• Q: Stop current song\n";
-    cout << "• R: Restart song\n";
-    cout << "• <: Rewind 5 seconds\n";
-    cout << "• >: Forward 5 seconds\n";
-    cout << "• ESC: Exit to main menu\n\n";
-
-    cout << CYAN << "File Management:" << RESET << "\n";
-    cout << "• Supported formats: .wav, .ogg, .flac, .mp3\n";
-    cout << "• Playlist is automatically saved\n";
-    cout << "• Use absolute paths or relative paths from program directory\n\n";
-
-    cout << "\nPress Enter to return to menu..." << RESET;
-    cin.get();
-}
-
-void displayError(const string& message)
-{
-    cout << RED << BOLD << "Error: " << message << RESET << "\n";
-    this_thread::sleep_for(chrono::seconds(2));
-}
-
-void displaySuccess(const string& message)
-{
-    cout << GREEN << BOLD << "Success: " << message << RESET << "\n";
-    this_thread::sleep_for(chrono::seconds(2));
-}
-
-void displayInfo(const string& message)
-{
-    cout << BLUE << BOLD << "Info: " << message << RESET << "\n";
-}
-
-void handleResize(int sig)
-{
-    // Clear screen and redraw interface
-    clearScreen();
-    displayLogo();
-    displayMenu();
-}
-
-
-void initializePlayer()
-{
-    // Set up terminal
-    #ifdef _WIN32
-        system("color");
-    #else
-        // Handle terminal resize for Unix-like systems
-        signal(SIGWINCH, handleResize);
-    #endif
-
-    // Create save directory if it doesn't exist
-    fs::create_directories("playlist_data");
-}
-
-void displayLogo()
-{
-    cout << MAGENTA << BOLD;
-    cout << R"(
-    ╔═══════════════════════════════════════════════╗
-    ║     ♪♫•*¨*•.¸¸♫♪ BTS PLAYER ♪♫•*¨*•.¸¸♫♪      ║
-    ╚═══════════════════════════════════════════════╝
-)" << RESET << endl;
-}
-
-void displayMenu()
-{
-    string menu[] = {
-        CYAN + "1. " + GREEN + "Add Song" + RESET,
-        CYAN + "2. " + GREEN + "View Playlist" + RESET,
-        CYAN + "3. " + GREEN + "Remove Song" + RESET,
-        CYAN + "4. " + GREEN + "Play Song" + RESET,
-        CYAN + "5. " + GREEN + "Edit Song" + RESET,
-        CYAN + "6. " + GREEN + "Search Songs" + RESET,
-        CYAN + "7. " + GREEN + "Sort Playlist" + RESET,
-        CYAN + "8. " + GREEN + "Help" + RESET,
-        CYAN + "9. " + RED + "Exit" + RESET
-    };
-
-    for (const auto& item : menu)
-    {
-        cout << item << "\n";
-    }
-    cout << "\n";
-}
-
-
-void removeSong(vector<Song>& playlist)
-{
-    clearScreen();
-
-    // Display the current playlist
-    cout << MAGENTA << BOLD << "╔════════════════════════════════════════╗\n";
-    cout << "║          🎵 Remove a Song 🎵           ║\n";
-    cout << "╚════════════════════════════════════════╝" << RESET << "\n\n";
-
-    if (playlist.empty())
-    {
-        displayInfo("Playlist is empty! There are no songs to remove.");
-        return;
-    }
-
-    // displayPlaylist()
-
-    // Prompt the user to select a song to remove
-    int songNumber;
-    while (true)
-    {
-        cout << CYAN << "\nEnter the song number to remove (0 to cancel): " << RESET;
-        cin >> songNumber;
-
-        if (cin.fail() || songNumber < 0 || songNumber > static_cast<int>(playlist.size()))
-        {
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            displayError("Invalid input! Please enter a valid song number.");
-        }
-        else if (songNumber == 0)
-        {
-            displayInfo("Song removal cancelled.");
-            return;
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    size_t indexToRemove = static_cast<size_t>(songNumber - 1);
-    string removedSongTitle = playlist[indexToRemove].title; // For feedback
-    playlist.erase(playlist.begin() + indexToRemove);
-
-    displaySuccess("✅ Successfully removed \"" + removedSongTitle + "\" from the playlist.");
-
-    // Save the updated playlist
-    savePlaylist(playlist);
 }
