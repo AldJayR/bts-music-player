@@ -551,7 +551,15 @@ void addSong(vector<Song>& playlist)
         displayError("Title cannot be empty!");
     }
 
-    song.artist = "BTS";
+    if (song.title == "The Astronaut")
+    {
+        song.artist = "Jin";
+    }
+    else
+    {
+        song.artist = "BTS";
+    }
+
 
     // Album input with non-empty validation
     while (true)
