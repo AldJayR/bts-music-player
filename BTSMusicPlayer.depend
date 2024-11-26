@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1732546841 source:c:\users\asus\documents\crud systems\btsmusicplayer\main.cpp
+1732632591 source:c:\users\asus\documents\crud systems\btsmusicplayer\main.cpp
 	<SFML/Audio.hpp>
 	<iostream>
 	<string>
@@ -14,6 +14,7 @@
 	<csignal>
 	<conio.h>
 	<windows.h>
+	<regex>
 	<sstream>
 
 1699047563 c:\users\asus\documents\c libs\sfml-2.6.1\include\sfml\audio.hpp

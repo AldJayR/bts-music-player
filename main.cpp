@@ -53,7 +53,7 @@ struct Song
 
 // Music player functions
 void initializePlayer();
-void playSong(const Song& song, bool& shouldExit);
+void playSong(const Song& song, bool& shouldExit, bool repeat);
 void editSong(vector<Song>& playlist);
 void searchSongs(const vector<Song>& playlist);
 void sortPlaylist(vector<Song>& playlist);
@@ -62,7 +62,7 @@ void removeSong(vector<Song>& playlist);
 
 // Helper functions
 string getProgressBar(float percentage, bool isPaused);
-bool validateAudioFile(const string& filepath);
+bool validateAudioFile(string& filepath);
 string formatDuration(float seconds);
 string toLower(const string& str);
 void handleResize(int sig);
@@ -94,6 +94,7 @@ int main()
 {
     initializePlayer();
     SetConsoleOutputCP(CP_UTF8);
+    SetConsoleTitle("BTS Music Player");
     vector<Song> playlist;
     char choice;
     bool isPlaying = false;
@@ -132,7 +133,7 @@ int main()
                     if (index > 0 && index <= playlist.size())
                     {
                         hideCursor();
-                        playSong(playlist[index - 1], shouldExit);
+                        playSong(playlist[index - 1], shouldExit, false);
                     }
                 }
                 else
@@ -184,7 +185,7 @@ void initializePlayer()
     fs::create_directories("playlist_data");
 }
 
-void playSong(const Song& song, bool& shouldExit)
+void playSong(const Song& song, bool& shouldExit, bool repeat)
 {
     sf::Music music;
     if (!music.openFromFile(song.filepath))
@@ -208,6 +209,20 @@ void playSong(const Song& song, bool& shouldExit)
         {
             displayProgress(music, song, isPaused, currentVolume);
             lastUpdateTime = now;
+        }
+
+        if (music.getStatus() == sf::Music::Stopped)
+        {
+            if (repeat)
+            {
+                music.setPlayingOffset(sf::Time::Zero);
+                music.play();
+            }
+            else
+            {
+                // If not repeating, just exit the function to move to next song
+                return;
+            }
         }
 
         if (_kbhit())
@@ -255,6 +270,10 @@ void playSong(const Song& song, bool& shouldExit)
                 case '-': // Volume down
                     currentVolume = max(currentVolume - 5.0, 0.0);
                     music.setVolume(static_cast<float>(currentVolume));
+                    needsRedraw = true;
+                    break;
+                case 'l': // Toggle repeat
+                    repeat = !repeat;
                     needsRedraw = true;
                     break;
             }
@@ -659,15 +678,71 @@ string getProgressBar(float percentage, bool isPaused)
     return bar + " " + oss.str();
 }
 
-bool validateAudioFile(const string& filepath)
+bool validateAudioFile(string& filepath)
 {
-    if (!fs::exists(filepath)) return false;
+    fs::path inputPath(filepath);
+    fs::path fullPath;
 
-    string extension = fs::path(filepath).extension().string();
-    transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    // If path is already absolute, use it directly
+    if (inputPath.is_absolute())
+    {
+        fullPath = inputPath;
+    }
+    else
+    {
+        // Try multiple potential base paths
+        vector<fs::path> searchPaths =
+        {
+            fs::current_path(),
+            fs::current_path() / "playlist_data"
+        };
 
+        bool found = false;
+        for (const auto& basePath : searchPaths)
+        {
+            fullPath = basePath / inputPath;
+            if (fs::exists(fullPath))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        // If file not found in any of the search paths, return false
+        if (!found)
+        {
+            return false;
+        }
+    }
+
+    // Check if file exists and is a regular file
+    if (!fs::exists(fullPath) || !fs::is_regular_file(fullPath))
+    {
+        return false;
+    }
+
+    // Get extension
+    string extension = fullPath.extension().string();
+
+    // Validate extension (case-insensitive)
     vector<string> validExtensions = {".wav", ".ogg", ".flac", ".mp3"};
-    return find(validExtensions.begin(), validExtensions.end(), extension) != validExtensions.end();
+    bool isValid = any_of(validExtensions.begin(), validExtensions.end(),
+        [&extension](const string& validExt)
+        {
+            return equal(validExt.begin(), validExt.end(),
+                         extension.begin(), extension.end(),
+                         [](char a, char b)
+                         {
+                             return tolower(a) == tolower(b);
+                         });
+        });
+
+    if (isValid)
+    {
+        filepath = fullPath.lexically_normal().string();
+    }
+
+    return isValid;
 }
 
 string formatDuration(float seconds)
@@ -958,17 +1033,23 @@ void savePlaylist(const vector<Song>& playlist)
 
     for (const auto& song : playlist)
     {
+        // Convert absolute path to relative path for storage
+        fs::path fullPath(song.filepath);
+        fs::path relativePath = fs::proximate(fullPath, fs::current_path());
+        string relativePathStr = relativePath.string();
+
         size_t titleLen = song.title.length();
         size_t artistLen = song.artist.length();
-        size_t filepathLen = song.filepath.length();
+        size_t filepathLen = relativePathStr.length();
         size_t albumLen = song.album.length();
 
+        // Write data using relative path
         file.write(reinterpret_cast<const char*>(&titleLen), sizeof(titleLen));
         file.write(song.title.c_str(), titleLen);
         file.write(reinterpret_cast<const char*>(&artistLen), sizeof(artistLen));
         file.write(song.artist.c_str(), artistLen);
         file.write(reinterpret_cast<const char*>(&filepathLen), sizeof(filepathLen));
-        file.write(song.filepath.c_str(), filepathLen);
+        file.write(relativePathStr.c_str(), filepathLen);
         file.write(reinterpret_cast<const char*>(&albumLen), sizeof(albumLen));
         file.write(song.album.c_str(), albumLen);
         file.write(reinterpret_cast<const char*>(&song.year), sizeof(song.year));
@@ -1000,6 +1081,11 @@ void loadPlaylist(vector<Song>& playlist)
         file.read(reinterpret_cast<char*>(&filepathLen), sizeof(filepathLen));
         song.filepath.resize(filepathLen);
         file.read(&song.filepath[0], filepathLen);
+
+        // Convert stored relative path to absolute path
+        fs::path relativePath(song.filepath);
+        fs::path fullPath = fs::current_path() / relativePath;
+        song.filepath = fullPath.lexically_normal().string();
 
         file.read(reinterpret_cast<char*>(&albumLen), sizeof(albumLen));
         song.album.resize(albumLen);
