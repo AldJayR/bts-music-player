@@ -528,37 +528,70 @@ void addSong(vector<Song>& playlist)
 
     Song song;
 
-    char ch = _getch();
-
-    if (ch == 27) // Escape key to exit
+    // Check for immediate escape
+    if (_kbhit())
     {
-        return;
+        char ch = _getch();
+        if (ch == 27) // Escape key to exit
+        {
+            return;
+        }
     }
 
-    cout << CYAN << "🔹 Enter song title: " << RESET;
-    getline(cin, song.title);
+    // Title input with non-empty validation
+    while (true)
+    {
+        cout << CYAN << "🔹 Enter song title: " << RESET;
+        getline(cin, song.title);
+
+        if (!song.title.empty())
+        {
+            break;
+        }
+        displayError("Title cannot be empty!");
+    }
 
     song.artist = "BTS";
 
-    cout << CYAN << "🔹 Enter album name: " << RESET;
-    getline(cin, song.album);
+    // Album input with non-empty validation
+    while (true)
+    {
+        cout << CYAN << "🔹 Enter album name: " << RESET;
+        getline(cin, song.album);
 
-    // Enter release year
+        if (!song.album.empty())
+        {
+            break;
+        }
+        displayError("Album name cannot be empty!");
+    }
+
+    // Enter release year with robust input validation
     while (true)
     {
         cout << CYAN << "🔹 Enter release year: " << RESET;
-        cin >> song.year;
 
-        if (cin.fail() || song.year < 1900 || song.year > 2100)
+        string yearInput;
+        getline(cin, yearInput);
+
+        try
         {
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            displayError("Invalid year! Please enter a valid year (1900-2100).");
+            song.year = stoi(yearInput);
+
+            if (song.year >= 1900 && song.year <= 2100)
+            {
+                break;
+            }
+
+            displayError("Invalid year! Please enter a year between 1900-2100.");
         }
-        else
+        catch (const invalid_argument&)
         {
-            cin.ignore();
-            break;
+            displayError("Invalid input! Please enter a numeric year.");
+        }
+        catch (const std::out_of_range&)
+        {
+            displayError("Year is out of valid range!");
         }
     }
 
@@ -567,22 +600,35 @@ void addSong(vector<Song>& playlist)
         cout << CYAN << "🔹 Enter audio filepath: " << RESET;
         getline(cin, song.filepath);
 
-        if (validateAudioFile(song.filepath))
+        // Trim whitespace from filepath
+        song.filepath.erase(0, song.filepath.find_first_not_of(" \t"));
+        song.filepath.erase(song.filepath.find_last_not_of(" \t") + 1);
+
+        if (!song.filepath.empty() && validateAudioFile(song.filepath))
         {
             break;
         }
         displayError("❌ Invalid audio file! Please check the path and try again.");
     }
 
-    // Get duration using SFML
+    // Get duration using SFML with error handling
     sf::Music music;
-    if (music.openFromFile(song.filepath))
+    try
     {
-        song.duration = music.getDuration().asSeconds();
+        if (music.openFromFile(song.filepath))
+        {
+            song.duration = music.getDuration().asSeconds();
+        }
+        else
+        {
+            song.duration = 0.0f;
+            displayError("Could not determine song duration.");
+        }
     }
-    else
+    catch (const exception& e)
     {
         song.duration = 0.0f;
+        displayError("Error processing audio file: " + string(e.what()));
     }
 
     playlist.push_back(song);
