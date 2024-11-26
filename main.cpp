@@ -528,6 +528,13 @@ void addSong(vector<Song>& playlist)
 
     Song song;
 
+    char ch = _getch();
+
+    if (ch == 27) // Escape key to exit
+    {
+        return;
+    }
+
     cout << CYAN << "🔹 Enter song title: " << RESET;
     getline(cin, song.title);
 
@@ -1082,7 +1089,6 @@ void loadPlaylist(vector<Song>& playlist)
         song.filepath.resize(filepathLen);
         file.read(&song.filepath[0], filepathLen);
 
-        // Convert stored relative path to absolute path
         fs::path relativePath(song.filepath);
         fs::path fullPath = fs::current_path() / relativePath;
         song.filepath = fullPath.lexically_normal().string();
