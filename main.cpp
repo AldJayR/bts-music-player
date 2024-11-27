@@ -597,7 +597,7 @@ void addSong(vector<Song>& playlist)
         {
             displayError("Invalid input! Please enter a numeric year.");
         }
-        catch (const std::out_of_range&)
+        catch (const out_of_range&)
         {
             displayError("Year is out of valid range!");
         }
