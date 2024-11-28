@@ -64,8 +64,7 @@ void removeSong(vector<Song>& playlist);
 string getProgressBar(float percentage, bool isPaused);
 bool validateAudioFile(string& filepath);
 string formatDuration(float seconds);
-string toLower(const string& str);
-void handleResize(int sig);
+string toLower(const string str);
 
 // Utility code
 void clearScreen();
@@ -551,9 +550,13 @@ void addSong(vector<Song>& playlist)
         displayError("Title cannot be empty!");
     }
 
-    if (song.title == "The Astronaut")
+    if (toLower(song.title) == "the astronaut")
     {
         song.artist = "Jin";
+    }
+    else if (toLower(song.title) == "my universe")
+    {
+        song.artist = "Coldplay / BTS";
     }
     else
     {
@@ -816,15 +819,7 @@ string formatDuration(float seconds)
     return ss.str();
 }
 
-void handleResize(int sig)
-{
-    // Clear screen and redraw interface
-    clearScreen();
-    displayLogo();
-    displayMenu();
-}
-
-string toLower(const string& str)
+string toLower(const string str)
 {
     string lower = str;
     transform(lower.begin(), lower.end(), lower.begin(),
