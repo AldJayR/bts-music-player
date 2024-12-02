@@ -151,7 +151,6 @@ int main()
             case 7: // Sort Playlist
                 sortPlaylist(playlist);
                 savePlaylist(playlist);
-                displaySuccess("Playlist sorted successfully!");
                 break;
             case 8: // Help
                 displayHelp();
@@ -389,6 +388,7 @@ void searchSongs(const vector<Song>& playlist)
     if (playlist.empty())
     {
         displayError("🎵 Playlist is empty!");
+        Sleep(1500);
         return;
     }
 
@@ -426,18 +426,18 @@ void searchSongs(const vector<Song>& playlist)
             if (!filteredSongs.empty())
             {
                 cout << "\n\n";
-                cout << CYAN << "┌────────────────────┬────────────────────┐" << RESET << endl;
-                cout << CYAN << "│ " << WHITE << setw(18) << left << "Title"
-                     << CYAN << " │ " << WHITE << setw(18) << left << "Album" << BLUE << " │" << RESET << endl;
-                cout << CYAN << "├────────────────────┼────────────────────┤" << RESET << endl;
+                cout << CYAN << "┌───────────────────────────┬───────────────────────────┐" << RESET << '\n';
+                cout << CYAN << "│ " << WHITE << setw(25) << left << "Title"
+                     << CYAN << " │ " << WHITE << setw(25) << left << "Album" << CYAN << " │" << RESET << '\n';
+                cout << CYAN << "├───────────────────────────┼───────────────────────────┤" << RESET << '\n';
 
                 for (const auto& song : filteredSongs)
                 {
-                    cout << CYAN << "│ " << WHITE << setw(18) << left << song.title
-                         << CYAN << " │ " << WHITE << setw(18) << left << song.album << BLUE << " │" << RESET << endl;
+                    cout << CYAN << "│ " << WHITE << setw(25) << left << song.title
+                         << CYAN << " │ " << WHITE << setw(25) << left << song.album << CYAN << " │" << RESET << '\n';
                 }
 
-                cout << CYAN << "└────────────────────┴────────────────────┘" << RESET << endl;
+                cout << CYAN << "└───────────────────────────┴───────────────────────────┘" << RESET << '\n';
             }
             else
             {
@@ -471,6 +471,7 @@ void sortPlaylist(vector<Song>& playlist)
     if (playlist.empty())
     {
         displayError("🎵 Playlist is empty!");
+        Sleep(1500);
         return;
     }
 
@@ -487,7 +488,14 @@ void sortPlaylist(vector<Song>& playlist)
         cout << "3. Year\n";
         cout << "4. Duration\n" << RESET;
 
-        int choice = get_int("Enter choice: ");
+        int choice = get_int("Enter choice (0 to exit): ");
+
+        if (choice == 0)
+        {
+            cout << YELLOW << "Returning to main menu...";
+            Sleep(1500);
+            return;
+        }
 
         switch (choice)
         {
@@ -1046,7 +1054,7 @@ void displayHelp()
     cout << BLUE << "• " << RESET << "+ or /: Increase volume\n\n";
 
     cout << CYAN << BOLD << "File Management:" << RESET << "\n";
-    cout << BLUE << "• " << RESET << "Supported formats: .wav, .ogg, .flac, .mp3\n";
+    cout << BLUE << "• " << RESET << "Supported formats: .wav, .ogg, .flac" << '\n';
     cout << BLUE << "• " << RESET << "Playlist is automatically saved\n";
     cout << BLUE << "• " << RESET << "Use absolute paths or relative paths from program directory\n\n";
 
